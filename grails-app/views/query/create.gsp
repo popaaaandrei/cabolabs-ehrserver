@@ -110,6 +110,11 @@
       #criteria_builder > ul > li::before, #criteria_builder > ul > li::after {
         border: 0;
       }
+
+      .datavalue {
+        /*background: lime;*/
+        font-weight: bold;
+      }
     </style>
 
     <!-- query test -->
@@ -129,7 +134,9 @@
       // globals
       var session_lang = "${session.lang}"; // needed by query_test_and_execution.js
       var get_concepts_url = '${createLink(controller:"query", action:"getConcepts")}';
-      var get_archetypes_in_template_url = '${createLink(controller:"query", action:"getArchetypesInTemplate")}';
+      //var get_archetypes_in_template_url = '${createLink(controller:"query", action:"getArchetypesInTemplate")}';
+      //var get_archetypes_in_template_url = '${createLink(controller:"query", action:"getTemplateJson")}';
+      var get_archetypes_in_template_url = '${createLink(controller:"query", action:"getArchetypesInTemplate2")}';
       var current_criteria_spec; // set by getCriteriaSpec
 
       <%-- Another way to get current locale ${org.springframework.context.i18n.LocaleContextHolder.locale.language} --%>
@@ -1163,21 +1170,77 @@ resp.responseJSON.result.message +'</div>'
       // =================================
       // COMMON QUERY CREATE/EDIT ========
       // =================================
+      var is_dv = function(rm_type_name){
+        // FIXME: missing dvs!
+        return ['DV_TEXT', 'DV_CODED_TEXT', 'DV_DATE', 'DV_DATE_TIME', 'DV_TIME',
+                'DV_COUNT', 'DV_QUANTITY', 'DV_PROPORTION', 'DV_ORDINAL', 'DV_DURATION',
+                'DV_BOOLEAN', 'DV_IDENTIFIER', 'DV_PARSABLE', 'DV_MULTIMEDIA',
+                'String'].includes(rm_type_name);
+      };
+
+      var process_archetype_obj = function(obj, level, select)
+      {
+        //console.log(obj.rm_type_name);
+
+        // primitive don't have attributes and their constraints are included in the criteria already, no need to add their path
+        if (obj.type == "C_PRIMITIVE_OBJECT")
+        {
+          return;
+        }
+
+        select.append(
+          /*
+          '<option value="'+ didx.path +'" data-type="'+ didx.rmTypeName +'" data-name="'+ didx.name[session_lang] +'"'+
+          (didx.path.endsWith('/null_flavour')?'class="null_flavour"':'') +'>'+
+          didx.name[session_lang] +' ('+ didx.rmTypeName + ')</option>'
+          */
+          '<option value="'+ obj.path +'" data-type="'+ obj.rm_type_name +'" '+
+                   (is_dv(obj.rm_type_name) ? 'class="datavalue '+ (obj.path.endsWith('/null_flavour')?'null_flavour':'') +'"' : (obj.path.endsWith('/null_flavour')?'class="null_flavour"':'')) +
+                   'data-name="'+ obj.text +'">'+
+            '\xA0'.repeat(level+(level > 0 ? level : 0)) + (level > 0 ? '\u2514 ' : '') + obj.text +' ('+ obj.rm_type_name +')</option>'
+        );
+
+        // avoid further processing for DVs since the criteria includes those fields, there is no need to select a subpath of a DV
+        if (is_dv(obj.rm_type_name)) return;
+
+        obj.attributes.forEach(function(attr){
+          process_archetype_attr(attr, level+1, select);
+        });
+      };
+      var process_archetype_attr = function(attr, level, select)
+      {
+        attr.children.forEach(function(obj){
+          //console.log(obj.type);
+          // do not process archetype roots since current process is for the current archetypes not for children
+          // do not process slots because are not supported on the query
+          if (obj.type != "C_ARCHETYPE_ROOT" && obj.type != "ARCHETYPE_SLOT")
+          {
+            process_archetype_obj(obj, level, select);
+          }
+        });
+      };
 
       var get_and_render_archetype_paths = function (template_id, archetype_id) {
 
         $.ajax({
-          url: '${createLink(controller:"query", action:"getArchetypePaths")}',
+          url: '${createLink(controller:"query", action:"getArchetypePaths2")}',
           data: {template_id: template_id, archetypeId: archetype_id, datatypesOnly: true},
           dataType: 'json',
           success: function(data, textStatus) {
 
+            //console.log(data);
+            var level = 0;
+            var select = $('select[name=view_archetype_path]');
+
             // Saca las options que haya
-            $('select[name=view_archetype_path]').empty();
+            select.empty();
 
             // Agrega las options con las paths del arquetipo seleccionado
-            $('select[name=view_archetype_path]').append('<option value="">${g.message(code:"query.create.please_select_datapoint")}</option>');
+            select.append('<option value="">${g.message(code:"query.create.please_select_datapoint")}</option>');
 
+            process_archetype_obj(data, level, select);
+
+            /*
             // Adds options to the select
             $(data).each(function(i, didx) {
 
@@ -1191,6 +1254,7 @@ resp.responseJSON.result.message +'</div>'
                 );
               }
             });
+            */
           },
           error: function(XMLHttpRequest, textStatus, errorThrown) {
 
@@ -1981,6 +2045,9 @@ resp.responseJSON.result.message +'</div>'
 
           var archetype_id = $(this).val(); // arquetipo seleccionado
           var template_id  = $('#view_template_id').val();
+
+          if (template_id == "") return;
+
           get_and_render_archetype_paths(template_id, archetype_id);
 
         }); // click en select view_archetype_id
@@ -1990,9 +2057,16 @@ resp.responseJSON.result.message +'</div>'
          * Clic en una path de la lista (select[view_archetype_path])
          */
         $('select[name=view_archetype_path]').change(function() {
-
-          var datatype = $(this).find(':selected').data('type');
-          get_criteria_specs(datatype);
+          var option = $(this).find(':selected');
+          if (option.hasClass('datavalue'))
+          {
+            var datatype = option.data('type');
+            get_criteria_specs(datatype);
+          }
+          else
+          {
+            alert('Select a simple type node to define the criteria');
+          }
 
         }); // click en select view_archetype_path
       }); // ready
@@ -2102,8 +2176,7 @@ resp.responseJSON.result.message +'</div>'
                 </td>
                 <td>
                   <g:select name="queryGroup" from="${queryGroups}" value="${queryInstance?.queryGroup}"
-                            optionKey="uid" optionValue="name"
-                            noSelection="['': '']" class="form-control input-sm" />
+                            optionKey="uid" optionValue="name" class="form-control input-sm" />
                 </td>
               </tr>
               <sec:ifAnyGranted roles="ROLE_ADMIN">

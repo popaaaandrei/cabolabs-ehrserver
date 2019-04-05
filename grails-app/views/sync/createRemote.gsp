@@ -3,6 +3,11 @@
   <head>
     <meta name="layout" content="admin">
     <title><g:message code="sync.createRemote.title" /></title>
+    <style>
+    .checkbox .cr{
+      margin-top: 5px;
+    }
+    </style>
   </head>
   <body>
     <div class="row">
@@ -57,13 +62,12 @@
                 <g:textField name="remoteServerPath" required="" class="form-control" />
               </div>
 
-              <div class="form-group required checkbox">
+              <div class="form-group checkbox">
                 <label for="isActive">
                   <g:message code="remote.attr.isActive" />
-                  <span class="required-indicator">*</span>
+                  <g:checkBox name="isActive" />
+                  <span class="cr"><i class="cr-icon fa fa-check"></i></span>
                 </label>
-                <g:checkBox name="isActive" required="" />
-                <span class="cr"><i class="cr-icon fa fa-check"></i></span>
               </div>
 
               <div style="text-align:right;">

@@ -948,6 +948,8 @@ class BootStrap {
         new RequestMap(url: '/sync/save',                    configAttribute: 'ROLE_ADMIN').save()
         new RequestMap(url: '/sync/createRemote',            configAttribute: 'ROLE_ADMIN').save()
         new RequestMap(url: '/sync/saveRemote',              configAttribute: 'ROLE_ADMIN').save()
+        new RequestMap(url: '/sync/editRemote/**',           configAttribute: 'ROLE_ADMIN').save()
+        new RequestMap(url: '/sync/updateRemote/**',         configAttribute: 'ROLE_ADMIN').save()
 
         // the rest of the operations should be open and security is checked inside the action
         new RequestMap(url: '/user/index',                   configAttribute: 'ROLE_ADMIN,ROLE_ORG_MANAGER,ROLE_ACCOUNT_MANAGER').save()
@@ -1001,6 +1003,11 @@ class BootStrap {
          organizations << new Organization(name: 'Default Organization', number: '123456', uid:'e9d13294-bce7-44e7-9635-8e906da0c914')
 
          // the account will save the orgs
+
+         // Create default QueryGroup per organization, see https://github.com/ppazos/cabolabs-ehrserver/issues/982
+         organizations.each { org ->
+            new QueryGroup(name:'Ungrouped', organizationUid:org.uid).save()
+         }
 
       }
       else organizations = Organization.list()
@@ -1304,7 +1311,7 @@ gr_account.save(failOnError:true, flush:true)
       // On test, this should be done after creating the orgs
       def orgs = Organization.list()
       orgs.each { org ->
-         optMan.loadAll(org.uid)
+         optMan.loadAll(org.uid, true)
       }
 
 
