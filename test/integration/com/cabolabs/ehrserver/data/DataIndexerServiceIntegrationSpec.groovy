@@ -93,7 +93,7 @@ class DataIndexerServiceIntegrationSpec extends IntegrationSpec {
       // OPT loading
       def optMan = com.cabolabs.openehr.opt.manager.OptManager.getInstance( Holders.config.app.opt_repo.withTrailSeparator() )
       optMan.unloadAll(orgUid)
-      optMan.loadAll(orgUid)
+      optMan.loadAll(orgUid, true)
       // /Load test OPTs
    }
 
@@ -150,7 +150,7 @@ class DataIndexerServiceIntegrationSpec extends IntegrationSpec {
          def parsedVersions = slurper.parseText(versionsXML)
 
          assert CompositionIndex.count() == 0
-         def contribution = xmlService.processCommit(ehr, parsedVersions, 'CaboLabs EMR', new Date(), 'House, MD.')
+         def contribution = xmlService.processCommit(ehr, parsedVersions, new Date(), 'House, MD.')
          contribution.save() // contrib -> versions -> compoIndex
          assert CompositionIndex.count() == 1
          assert CompositionIndex.countByDataIndexed(false) == 1 // there is 1 compoIndex and should not be indexed

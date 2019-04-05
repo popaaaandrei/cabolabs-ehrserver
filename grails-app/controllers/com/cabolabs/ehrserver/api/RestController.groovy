@@ -256,13 +256,12 @@ class RestController {
     * Envia una lista de versions para commitear al EHR(ehrUid)
     *
     * @param String ehrUid
-    * @param auditSystemId
     * @param auditCommitter
     * @param List versions
     * @return
     */
    @SecuredStateless
-   def commit(String ehrUid, String auditSystemId, String auditCommitter)
+   def commit(String ehrUid, String auditCommitter)
    {
       log.info( "commit received "+ params.list('versions').size() + " versions"  )
 
@@ -270,20 +269,6 @@ class RestController {
       {
          commitLoggerService.log(request, null, false, null, session, params)
          renderError(message(code:'rest.error.ehr_uid_required'), '400', 400)
-         return
-      }
-
-      // https://github.com/ppazos/cabolabs-ehrserver/issues/923
-      if (!(auditSystemId ==~ /[A-Za-z0-9_\-\.]*/))
-      {
-         commitLoggerService.log(request, null, false, null, session, params)
-         renderError(message(code:'rest.error.auditSystemId.wrongFormat'), '400', 400)
-         return
-      }
-      if (!auditSystemId)
-      {
-         commitLoggerService.log(request, null, false, null, session, params)
-         renderError(message(code:'rest.error.auditSystemId_required'), '400', 400)
          return
       }
 
@@ -469,7 +454,7 @@ class RestController {
       try
       {
          // throws exceptions for any error
-         contribution = xmlService.processCommit(ehr, _parsedVersions, auditSystemId, new Date(), auditCommitter)
+         contribution = xmlService.processCommit(ehr, _parsedVersions, new Date(), auditCommitter)
          if (!contribution.save())
          {
             // FIXME: log and notification! an admin should review this situation
@@ -2104,7 +2089,18 @@ class RestController {
          return
       }
 
-      def res = equery.checkEhr(ehrUid)
+      // TODO: move to service checkEhr
+      def matching_compo_index_counts = []
+      equery.queries.each { query ->
+
+         matching_compo_index_counts << query.executeComposition(ehrUid, null, null, null, 1, 0, null, null, true)
+      }
+
+      //println matching_compo_index_counts // [[1], [0]]
+      //println matching_compo_index_counts.flatten() // [1, 0]
+
+      // the count should be > 0 on all results to return true
+      def res = matching_compo_index_counts.flatten().every { it > 0 }
 
       /*
       println "ehrQurry dirty "+ equery.dirty
@@ -2138,7 +2134,7 @@ class RestController {
       }
 
       def orgUid = request.securityStatelessMap.extradata.org_uid
-      def ehrUids = equery.getEhrUids(orgUid)
+      def ehrUids = equery.getEhrUids2(orgUid)
       render (ehrUids as JSON)
    }
 

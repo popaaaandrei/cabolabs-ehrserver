@@ -95,6 +95,7 @@ class SyncController {
       // so it can't be associated with an org, and UserRole requires an org
       //UserRole.create(virtualUser, Role.findByAuthority(Role.US), org, true)
 
+      // https://github.com/kaleidos/grails-security-stateless/blob/master/src/groovy/net/kaleidos/grails/plugin/security/stateless/token/JwtStatelessTokenProvider.groovy#L30
       def key = new ApiKey(user: virtualUser,
                            systemId: systemId,
                            scope: 'sync',
@@ -145,7 +146,40 @@ class SyncController {
          println "errors: "+ sync.errors.allErrors
       }
 
-      redirect action:'index'
+      flash.message = "Remote created"
+      redirect action: 'index'
+   }
+
+   def editRemote(Long id)
+   {
+      def remote = SyncClusterConfig.get(id)
+      if (!remote)
+      {
+         flash.message = "Remote doesn't exists"
+         redirect action: 'index'
+         return
+      }
+
+      render view: 'editRemote', model: [remote: remote]
+   }
+
+   def updateRemote(Long id)
+   {
+      def remote = SyncClusterConfig.get(id)
+      if (!remote)
+      {
+         flash.message = "Remote doesn't exists"
+         redirect action: 'index'
+         return
+      }
+      remote.properties = params
+      if (!remote.save())
+      {
+         println "errors: "+ remote.errors.allErrors
+      }
+
+      flash.message = "Remote updated"
+      redirect action: 'index'
    }
 
    @SecuredStateless
@@ -156,9 +190,11 @@ class SyncController {
       // TODO: check if already exists
       // TOOD: check if this is an update, that should be a PUT, OK result should be 200
       //println request.JSON
+      // TODO: transaction!
 
       // account with contact user and list of organizations
-      def account = syncParserService.fromJSONAccount(request.JSON.account)
+      def json = request.JSON.account
+      def account = syncParserService.fromJSONAccount(json)
 
       if (!account) println "NULL!!!!"
 
@@ -166,6 +202,25 @@ class SyncController {
       {
          // TODO: handle error
          println account.errors.allErrors
+
+         render(status:400, text: account.errors.allErrors as JSON, contentType:"application/json", encoding:"UTF-8")
+         return
+      }
+
+      def plan_associations = syncParserService.fromJSONPlanAssociations(json.plans, account)
+
+      plan_associations.each { plan_assoc ->
+         // plan is not saved in cascade by plan assoc
+         if (!plan_assoc.plan.save())
+         {
+            // TODO: handle errors
+            println plan_assoc.plan.errors.allErrors
+         }
+         if (!plan_assoc.save())
+         {
+            // TODO: handle errors
+            println plan_assoc.errors.allErrors
+         }
       }
 
       def alog = new ActivityLog(
@@ -317,6 +372,14 @@ class SyncController {
 
       def query = syncParserService.fromJSONQuery(jo)
 
+      // group is not saved in cascade so needs to be saved here
+      if (query.queryGroup)
+      {
+         if (!query.queryGroup.save())
+         {
+            println query.queryGroup.errors.allErrors
+         }
+      }
       if (!query.save(flush:true))
       {
          // TODO: handle error

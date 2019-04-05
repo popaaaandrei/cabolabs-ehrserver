@@ -42,6 +42,11 @@ import com.cabolabs.ehrserver.ehr.clinical_documents.*
 
 import com.cabolabs.ehrserver.openehr.common.generic.DoctorProxy
 
+import com.cabolabs.openehr.opt.manager.OptManager
+import com.cabolabs.openehr.opt.serializer.JsonSerializer
+import com.cabolabs.openehr.opt.model.ObjectNode
+import com.cabolabs.openehr.opt.model.AttributeNode
+
 // test
 import com.cabolabs.ehrserver.sync.SyncMarshallersService
 import groovy.json.*
@@ -677,6 +682,62 @@ class QueryController {
       }
    }
 
+
+
+   def getTemplateJson(String template_id)
+   {
+      //def opt_file = new File(config.opt_repo.withTrailSeparator() + session.organization.uid.withTrailSeparator() + opt.fileUid +".opt")
+      def optMan = OptManager.getInstance()
+      def opt = optMan.getOpt(template_id, session.organization.uid)
+      def toJson = new JsonSerializer()
+      toJson.serialize(opt)
+      def json = toJson.get()
+      render json, contentType: "application/json"
+   }
+
+   /**
+    * return a tree with references of archetypes and theirs slots.
+    */
+   def getArchetypesInTemplate2(String template_id)
+   {
+      def optMan = OptManager.getInstance()
+      def opt = optMan.getOpt(template_id, session.organization.uid)
+      Map tree = [:]
+      getReferencedArchetypesRecursive(opt.definition, tree)
+      render tree as JSON
+   }
+   // TODO: move these functions to openEHR-OPT.model.OPT
+   private getReferencedArchetypesRecursive(ObjectNode obj, Map parent_tree)
+   {
+      def child_tree = parent_tree
+      if (obj.path == '/' || obj.type == 'C_ARCHETYPE_ROOT')
+      {
+         parent_tree[obj.archetypeId] = [:]
+         parent_tree[obj.archetypeId].name = obj.getText(obj.nodeId)
+         parent_tree[obj.archetypeId].children = [:]
+         child_tree = parent_tree[obj.archetypeId].children
+      }
+
+      obj.attributes.each { attr ->
+         getReferencedArchetypesRecursive(attr, child_tree)
+      }
+   }
+   private getReferencedArchetypesRecursive(AttributeNode attr, Map parent_tree)
+   {
+      attr.children.each { obj ->
+         getReferencedArchetypesRecursive(obj, parent_tree)
+      }
+   }
+   def getArchetypePaths2(String template_id, String archetypeId, boolean datatypesOnly)
+   {
+      def optMan = OptManager.getInstance()
+      def opt = optMan.getOpt(template_id, session.organization.uid)
+      def obj = opt.findRoot(archetypeId)
+      def toJson = new JsonSerializer()
+      toJson.serialize(obj)
+      def json = toJson.get()
+      render json, contentType: "application/json"
+   }
 
    def getArchetypesInTemplate(String template_id)
    {
